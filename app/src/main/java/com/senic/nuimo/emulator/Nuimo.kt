@@ -97,6 +97,13 @@ class Nuimo(val context: Context) {
         gattServer?.notifyCharacteristicChanged(connectedDevice, characteristic, false)
     }
 
+    fun swipe(direction: NuimoSwipeDirection) {
+        if (connectedDevice == null) return
+        val characteristic = subscribedCharacteristics[SENSOR_TOUCH_CHARACTERISTIC_UUID] ?: return
+        characteristic.value = byteArrayOf(direction.gattByte)
+        gattServer?.notifyCharacteristicChanged(connectedDevice, characteristic, false)
+    }
+
     /*
      * Bluetooth GATT Handling
      */
@@ -253,6 +260,10 @@ class Nuimo(val context: Context) {
         if (level == -1 || scale == -1) { return 0 }
         return Math.min(100, Math.max(0, (level.toFloat() / scale.toFloat() * 100.0f).toInt()))
     }
+}
+
+enum class NuimoSwipeDirection(val gattByte: Byte) {
+    LEFT(0), RIGHT(1), UP(2), DOWN(3)
 }
 
 interface NuimoListener {
