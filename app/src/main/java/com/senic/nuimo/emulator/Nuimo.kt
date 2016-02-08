@@ -35,6 +35,7 @@ class Nuimo(val context: Context) {
     private val gattServer: BluetoothGattServer? = manager.openGattServer(context, NuimoGattServerCallback());
     private var isAdvertising = false
     private var connectedDevice: BluetoothDevice? = null
+    private var subscribedCharacteristics = HashSet<UUID>()
 
     fun addListener(listener: NuimoListener) {
         listeners.add(listener)
@@ -46,7 +47,7 @@ class Nuimo(val context: Context) {
 
     fun powerOn() {
         if (adapter == null || advertiser == null || gattServer == null) {
-            //TODO: Notify listener
+            //TODO: Notify listener about error
             return
         }
 
@@ -55,9 +56,11 @@ class Nuimo(val context: Context) {
         adapter.name = name
 
         NUIMO_SERVICE_UUIDS.forEach {
-            val service = BluetoothGattService(it.uuid, BluetoothGattService.SERVICE_TYPE_PRIMARY)
-            NUIMO_CHARACTERISTIC_UUIDS_FOR_SERVICE_UUIDS[it]!!.forEach {
-                service.addCharacteristic(BluetoothGattCharacteristic(it.uuid, PROPERTIES_FOR_CHARACTERISTIC_UUID[it]!!, PERMISSIONS_FOR_CHARACTERISTIC_UUID[it]!!))
+            val service = BluetoothGattService(it, BluetoothGattService.SERVICE_TYPE_PRIMARY)
+            NUIMO_CHARACTERISTIC_UUIDS_FOR_SERVICE_UUID[it]!!.forEach {
+                service.addCharacteristic(BluetoothGattCharacteristic(it, PROPERTIES_FOR_CHARACTERISTIC_UUID[it]!!, PERMISSIONS_FOR_CHARACTERISTIC_UUID[it]!!).apply {
+                    addDescriptor(BluetoothGattDescriptor(CHARACTERISTIC_NOTIFICATION_DESCRIPTOR_UUID, BluetoothGattDescriptor.PERMISSION_WRITE))
+                })
             }
             gattServer.addService(service)
         }
@@ -70,6 +73,7 @@ class Nuimo(val context: Context) {
     private fun reset() {
         Log.i(TAG, "RESET")
         stopAdvertising()
+        subscribedCharacteristics.clear()
         gattServer?.apply {
             clearServices()
             if (connectedDevice != null) {
@@ -95,7 +99,7 @@ class Nuimo(val context: Context) {
 
         val data = AdvertiseData.Builder()
                 .setIncludeDeviceName(true)
-                .addServiceUuid(SENSOR_SERVICE_UUID)
+                .addServiceUuid(ParcelUuid(SENSOR_SERVICE_UUID))
                 .build()
 
         advertiser.startAdvertising(settings, data, advertiserListener)
@@ -153,6 +157,7 @@ class Nuimo(val context: Context) {
                 listeners.forEach { it.onConnect(connectedDevice!!) }
             }
             else if (previousConnectedDevice != null && connectedDevice == null) {
+                subscribedCharacteristics.clear()
                 startAdvertising()
                 listeners.forEach { it.onDisconnect(previousConnectedDevice) }
             }
@@ -161,7 +166,7 @@ class Nuimo(val context: Context) {
         override fun onCharacteristicReadRequest(device: BluetoothDevice, requestId: Int, offset: Int, characteristic: BluetoothGattCharacteristic) {
             Log.i(TAG, "onCharacteristicReadRequest ${characteristic.uuid}, $requestId")
             when (characteristic.uuid) {
-                BATTERY_CHARACTERISTIC_UUID.uuid -> {
+                BATTERY_CHARACTERISTIC_UUID -> {
                     Log.i(TAG, "SEND BATTERY READ RESPONSE")
                     gattServer?.sendResponse(device, requestId, BluetoothGatt.GATT_SUCCESS, 0, byteArrayOf(getBatteryLevel().toByte()))
                 }
@@ -175,7 +180,7 @@ class Nuimo(val context: Context) {
         override fun onCharacteristicWriteRequest(device: BluetoothDevice, requestId: Int, characteristic: BluetoothGattCharacteristic, preparedWrite: Boolean, responseNeeded: Boolean, offset: Int, value: ByteArray?) {
             Log.i(TAG, "onCharacteristicWriteRequest ${characteristic.uuid}, $requestId, responseNeeded=$responseNeeded")
             when (characteristic.uuid) {
-                LED_MATRIX_CHARACTERISTIC_UUID.uuid -> {
+                LED_MATRIX_CHARACTERISTIC_UUID -> {
                     Log.i(TAG, "SEND MATRIX WRITE RESPONSE")
                     val errorCode = when {
                         !responseNeeded                   -> BluetoothGatt.GATT_REQUEST_NOT_SUPPORTED
@@ -198,6 +203,25 @@ class Nuimo(val context: Context) {
 
         override fun onDescriptorWriteRequest(device: BluetoothDevice, requestId: Int, descriptor: BluetoothGattDescriptor, preparedWrite: Boolean, responseNeeded: Boolean, offset: Int, value: ByteArray?) {
             Log.i(TAG, "onDescriptorWriteRequest ${descriptor.characteristic.uuid}, $requestId")
+
+            var responseStatus = BluetoothGatt.GATT_SUCCESS
+            if ((PROPERTIES_FOR_CHARACTERISTIC_UUID[descriptor.characteristic.uuid] ?: 0) and BluetoothGattCharacteristic.PROPERTY_NOTIFY > 0) {
+                if (value != null) {
+                    when {
+                        Arrays.deepEquals(BluetoothGattDescriptor.ENABLE_NOTIFICATION_VALUE.toTypedArray(), value.toTypedArray())  -> subscribedCharacteristics.add(descriptor.characteristic.uuid)
+                        Arrays.deepEquals(BluetoothGattDescriptor.DISABLE_NOTIFICATION_VALUE.toTypedArray(), value.toTypedArray()) -> subscribedCharacteristics.remove(descriptor.characteristic.uuid)
+                        else                                                                                                       -> responseStatus = BluetoothGatt.GATT_REQUEST_NOT_SUPPORTED
+                    }
+                }
+                else {
+                    responseStatus = BluetoothGatt.GATT_REQUEST_NOT_SUPPORTED
+                }
+            }
+            else {
+                responseStatus = BluetoothGatt.GATT_WRITE_NOT_PERMITTED
+            }
+
+            gattServer?.sendResponse(device, requestId, responseStatus, 0, byteArrayOf())
         }
 
         override fun onNotificationSent(device: BluetoothDevice, status: Int) {
@@ -232,17 +256,18 @@ interface NuimoListener {
  * Nuimo BLE GATT service and characteristic UUIDs
  */
 
-private val BATTERY_SERVICE_UUID                   = ParcelUuid.fromString("0000180f-0000-1000-8000-00805f9b34fb")
-private val BATTERY_CHARACTERISTIC_UUID            = ParcelUuid.fromString("00002a19-0000-1000-8000-00805f9b34fb")
-private val DEVICE_INFORMATION_SERVICE_UUID        = ParcelUuid.fromString("0000180a-0000-1000-8000-00805f9b34fb")
-private val DEVICE_INFORMATION_CHARACTERISTIC_UUID = ParcelUuid.fromString("00002a29-0000-1000-8000-00805f9b34fb")
-private val LED_MATRIX_SERVICE_UUID                = ParcelUuid.fromString("f29b1523-cb19-40f3-be5c-7241ecb82fd1")
-private val LED_MATRIX_CHARACTERISTIC_UUID         = ParcelUuid.fromString("f29b1524-cb19-40f3-be5c-7241ecb82fd1")
-private val SENSOR_SERVICE_UUID                    = ParcelUuid.fromString("f29b1525-cb19-40f3-be5c-7241ecb82fd2")
-private val SENSOR_FLY_CHARACTERISTIC_UUID         = ParcelUuid.fromString("f29b1526-cb19-40f3-be5c-7241ecb82fd2")
-private val SENSOR_TOUCH_CHARACTERISTIC_UUID       = ParcelUuid.fromString("f29b1527-cb19-40f3-be5c-7241ecb82fd2")
-private val SENSOR_ROTATION_CHARACTERISTIC_UUID    = ParcelUuid.fromString("f29b1528-cb19-40f3-be5c-7241ecb82fd2")
-private val SENSOR_BUTTON_CHARACTERISTIC_UUID      = ParcelUuid.fromString("f29b1529-cb19-40f3-be5c-7241ecb82fd2")
+private val BATTERY_SERVICE_UUID                        = UUID.fromString("0000180f-0000-1000-8000-00805f9b34fb")
+private val BATTERY_CHARACTERISTIC_UUID                 = UUID.fromString("00002a19-0000-1000-8000-00805f9b34fb")
+private val DEVICE_INFORMATION_SERVICE_UUID             = UUID.fromString("0000180a-0000-1000-8000-00805f9b34fb")
+private val DEVICE_INFORMATION_CHARACTERISTIC_UUID      = UUID.fromString("00002a29-0000-1000-8000-00805f9b34fb")
+private val LED_MATRIX_SERVICE_UUID                     = UUID.fromString("f29b1523-cb19-40f3-be5c-7241ecb82fd1")
+private val LED_MATRIX_CHARACTERISTIC_UUID              = UUID.fromString("f29b1524-cb19-40f3-be5c-7241ecb82fd1")
+private val SENSOR_SERVICE_UUID                         = UUID.fromString("f29b1525-cb19-40f3-be5c-7241ecb82fd2")
+private val SENSOR_FLY_CHARACTERISTIC_UUID              = UUID.fromString("f29b1526-cb19-40f3-be5c-7241ecb82fd2")
+private val SENSOR_TOUCH_CHARACTERISTIC_UUID            = UUID.fromString("f29b1527-cb19-40f3-be5c-7241ecb82fd2")
+private val SENSOR_ROTATION_CHARACTERISTIC_UUID         = UUID.fromString("f29b1528-cb19-40f3-be5c-7241ecb82fd2")
+private val SENSOR_BUTTON_CHARACTERISTIC_UUID           = UUID.fromString("f29b1529-cb19-40f3-be5c-7241ecb82fd2")
+private val CHARACTERISTIC_NOTIFICATION_DESCRIPTOR_UUID = UUID.fromString("00002902-0000-1000-8000-00805f9b34fb")
 
 val NUIMO_SERVICE_UUIDS = arrayOf(
         BATTERY_SERVICE_UUID,
@@ -251,29 +276,29 @@ val NUIMO_SERVICE_UUIDS = arrayOf(
         SENSOR_SERVICE_UUID
 )
 
-val NUIMO_CHARACTERISTIC_UUIDS_FOR_SERVICE_UUIDS = mapOf(
-        BATTERY_SERVICE_UUID to arrayOf(BATTERY_CHARACTERISTIC_UUID),
-        DEVICE_INFORMATION_SERVICE_UUID to arrayOf(DEVICE_INFORMATION_CHARACTERISTIC_UUID),
-        LED_MATRIX_SERVICE_UUID to arrayOf(LED_MATRIX_CHARACTERISTIC_UUID),
-        SENSOR_SERVICE_UUID to arrayOf(SENSOR_FLY_CHARACTERISTIC_UUID, SENSOR_TOUCH_CHARACTERISTIC_UUID, SENSOR_ROTATION_CHARACTERISTIC_UUID, SENSOR_BUTTON_CHARACTERISTIC_UUID)
+val NUIMO_CHARACTERISTIC_UUIDS_FOR_SERVICE_UUID = mapOf(
+        BATTERY_SERVICE_UUID                   to arrayOf(BATTERY_CHARACTERISTIC_UUID),
+        DEVICE_INFORMATION_SERVICE_UUID        to arrayOf(DEVICE_INFORMATION_CHARACTERISTIC_UUID),
+        LED_MATRIX_SERVICE_UUID                to arrayOf(LED_MATRIX_CHARACTERISTIC_UUID),
+        SENSOR_SERVICE_UUID                    to arrayOf(SENSOR_FLY_CHARACTERISTIC_UUID, SENSOR_TOUCH_CHARACTERISTIC_UUID, SENSOR_ROTATION_CHARACTERISTIC_UUID, SENSOR_BUTTON_CHARACTERISTIC_UUID)
 )
 
 val PROPERTIES_FOR_CHARACTERISTIC_UUID = mapOf(
-        BATTERY_CHARACTERISTIC_UUID to (BluetoothGattCharacteristic.PROPERTY_READ or BluetoothGattCharacteristic.PROPERTY_NOTIFY),
+        BATTERY_CHARACTERISTIC_UUID            to (BluetoothGattCharacteristic.PROPERTY_READ or BluetoothGattCharacteristic.PROPERTY_NOTIFY),
         DEVICE_INFORMATION_CHARACTERISTIC_UUID to BluetoothGattCharacteristic.PROPERTY_READ,
-        LED_MATRIX_CHARACTERISTIC_UUID to BluetoothGattCharacteristic.PROPERTY_WRITE,
-        SENSOR_FLY_CHARACTERISTIC_UUID to BluetoothGattCharacteristic.PROPERTY_NOTIFY,
-        SENSOR_TOUCH_CHARACTERISTIC_UUID to BluetoothGattCharacteristic.PROPERTY_NOTIFY,
-        SENSOR_ROTATION_CHARACTERISTIC_UUID to BluetoothGattCharacteristic.PROPERTY_NOTIFY,
-        SENSOR_BUTTON_CHARACTERISTIC_UUID to BluetoothGattCharacteristic.PROPERTY_NOTIFY
+        LED_MATRIX_CHARACTERISTIC_UUID         to BluetoothGattCharacteristic.PROPERTY_WRITE,
+        SENSOR_FLY_CHARACTERISTIC_UUID         to BluetoothGattCharacteristic.PROPERTY_NOTIFY,
+        SENSOR_TOUCH_CHARACTERISTIC_UUID       to BluetoothGattCharacteristic.PROPERTY_NOTIFY,
+        SENSOR_ROTATION_CHARACTERISTIC_UUID    to BluetoothGattCharacteristic.PROPERTY_NOTIFY,
+        SENSOR_BUTTON_CHARACTERISTIC_UUID      to BluetoothGattCharacteristic.PROPERTY_NOTIFY
 )
 
 val PERMISSIONS_FOR_CHARACTERISTIC_UUID = mapOf(
-        BATTERY_CHARACTERISTIC_UUID to (BluetoothGattCharacteristic.PERMISSION_READ),
+        BATTERY_CHARACTERISTIC_UUID            to (BluetoothGattCharacteristic.PERMISSION_READ),
         DEVICE_INFORMATION_CHARACTERISTIC_UUID to BluetoothGattCharacteristic.PERMISSION_READ,
-        LED_MATRIX_CHARACTERISTIC_UUID to BluetoothGattCharacteristic.PERMISSION_WRITE,
-        SENSOR_FLY_CHARACTERISTIC_UUID to BluetoothGattCharacteristic.PERMISSION_READ,
-        SENSOR_TOUCH_CHARACTERISTIC_UUID to BluetoothGattCharacteristic.PERMISSION_READ,
-        SENSOR_ROTATION_CHARACTERISTIC_UUID to BluetoothGattCharacteristic.PERMISSION_READ,
-        SENSOR_BUTTON_CHARACTERISTIC_UUID to BluetoothGattCharacteristic.PERMISSION_READ
+        LED_MATRIX_CHARACTERISTIC_UUID         to BluetoothGattCharacteristic.PERMISSION_WRITE,
+        SENSOR_FLY_CHARACTERISTIC_UUID         to BluetoothGattCharacteristic.PERMISSION_READ,
+        SENSOR_TOUCH_CHARACTERISTIC_UUID       to BluetoothGattCharacteristic.PERMISSION_READ,
+        SENSOR_ROTATION_CHARACTERISTIC_UUID    to BluetoothGattCharacteristic.PERMISSION_READ,
+        SENSOR_BUTTON_CHARACTERISTIC_UUID      to BluetoothGattCharacteristic.PERMISSION_READ
 )
