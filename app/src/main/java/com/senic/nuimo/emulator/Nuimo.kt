@@ -224,10 +224,10 @@ class Nuimo(val context: Context) {
 
             val responseStatus = when {
                 (PROPERTIES_FOR_CHARACTERISTIC_UUID[descriptor.characteristic.uuid] ?: 0) and BluetoothGattCharacteristic.PROPERTY_NOTIFY == 0 -> BluetoothGatt.GATT_WRITE_NOT_PERMITTED
-                value == null                                                                                              -> BluetoothGatt.GATT_REQUEST_NOT_SUPPORTED
-                Arrays.deepEquals(BluetoothGattDescriptor.ENABLE_NOTIFICATION_VALUE.toTypedArray(), value.toTypedArray())  -> { subscribedCharacteristics[descriptor.characteristic.uuid] = descriptor.characteristic; BluetoothGatt.GATT_SUCCESS }
-                Arrays.deepEquals(BluetoothGattDescriptor.DISABLE_NOTIFICATION_VALUE.toTypedArray(), value.toTypedArray()) -> { subscribedCharacteristics.remove(descriptor.characteristic.uuid); BluetoothGatt.GATT_SUCCESS }
-                else                                                                                                       -> BluetoothGatt.GATT_REQUEST_NOT_SUPPORTED
+                value == null                                                         -> BluetoothGatt.GATT_REQUEST_NOT_SUPPORTED
+                value.equalsArray(BluetoothGattDescriptor.ENABLE_NOTIFICATION_VALUE)  -> { subscribedCharacteristics[descriptor.characteristic.uuid] = descriptor.characteristic; BluetoothGatt.GATT_SUCCESS }
+                value.equalsArray(BluetoothGattDescriptor.DISABLE_NOTIFICATION_VALUE) -> { subscribedCharacteristics.remove(descriptor.characteristic.uuid); BluetoothGatt.GATT_SUCCESS }
+                else                                                                  -> BluetoothGatt.GATT_REQUEST_NOT_SUPPORTED
             }
             gattServer?.sendResponse(device, requestId, responseStatus, 0, byteArrayOf())
         }
@@ -310,3 +310,5 @@ val PERMISSIONS_FOR_CHARACTERISTIC_UUID = mapOf(
         SENSOR_ROTATION_CHARACTERISTIC_UUID    to BluetoothGattCharacteristic.PERMISSION_READ,
         SENSOR_BUTTON_CHARACTERISTIC_UUID      to BluetoothGattCharacteristic.PERMISSION_READ
 )
+
+fun ByteArray.equalsArray(other: ByteArray) = Arrays.equals(this, other)
