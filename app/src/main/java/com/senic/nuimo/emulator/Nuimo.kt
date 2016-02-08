@@ -200,23 +200,13 @@ class Nuimo(val context: Context) {
         override fun onDescriptorWriteRequest(device: BluetoothDevice, requestId: Int, descriptor: BluetoothGattDescriptor, preparedWrite: Boolean, responseNeeded: Boolean, offset: Int, value: ByteArray?) {
             Log.i(TAG, "onDescriptorWriteRequest ${descriptor.characteristic.uuid}, $requestId")
 
-            var responseStatus = BluetoothGatt.GATT_SUCCESS
-            if ((PROPERTIES_FOR_CHARACTERISTIC_UUID[descriptor.characteristic.uuid] ?: 0) and BluetoothGattCharacteristic.PROPERTY_NOTIFY > 0) {
-                if (value != null) {
-                    when {
-                        Arrays.deepEquals(BluetoothGattDescriptor.ENABLE_NOTIFICATION_VALUE.toTypedArray(), value.toTypedArray())  -> subscribedCharacteristics.add(descriptor.characteristic.uuid)
-                        Arrays.deepEquals(BluetoothGattDescriptor.DISABLE_NOTIFICATION_VALUE.toTypedArray(), value.toTypedArray()) -> subscribedCharacteristics.remove(descriptor.characteristic.uuid)
-                        else                                                                                                       -> responseStatus = BluetoothGatt.GATT_REQUEST_NOT_SUPPORTED
-                    }
-                }
-                else {
-                    responseStatus = BluetoothGatt.GATT_REQUEST_NOT_SUPPORTED
-                }
+            val responseStatus = when {
+                (PROPERTIES_FOR_CHARACTERISTIC_UUID[descriptor.characteristic.uuid] ?: 0) and BluetoothGattCharacteristic.PROPERTY_NOTIFY == 0 -> BluetoothGatt.GATT_WRITE_NOT_PERMITTED
+                value == null                                                                                              -> BluetoothGatt.GATT_REQUEST_NOT_SUPPORTED
+                Arrays.deepEquals(BluetoothGattDescriptor.ENABLE_NOTIFICATION_VALUE.toTypedArray(), value.toTypedArray())  -> { subscribedCharacteristics.add(descriptor.characteristic.uuid); BluetoothGatt.GATT_SUCCESS }
+                Arrays.deepEquals(BluetoothGattDescriptor.DISABLE_NOTIFICATION_VALUE.toTypedArray(), value.toTypedArray()) -> { subscribedCharacteristics.remove(descriptor.characteristic.uuid); BluetoothGatt.GATT_SUCCESS }
+                else                                                                                                       -> BluetoothGatt.GATT_REQUEST_NOT_SUPPORTED
             }
-            else {
-                responseStatus = BluetoothGatt.GATT_WRITE_NOT_PERMITTED
-            }
-
             gattServer?.sendResponse(device, requestId, responseStatus, 0, byteArrayOf())
         }
 
