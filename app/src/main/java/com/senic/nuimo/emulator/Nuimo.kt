@@ -56,14 +56,10 @@ class Nuimo(val context: Context) {
         adapter.name = name
 
         NUIMO_SERVICE_UUIDS.forEach {
-            val service = BluetoothGattService(it, BluetoothGattService.SERVICE_TYPE_PRIMARY)
-            NUIMO_CHARACTERISTIC_UUIDS_FOR_SERVICE_UUID[it]!!.forEach {
-                service.addCharacteristic(BluetoothGattCharacteristic(it, PROPERTIES_FOR_CHARACTERISTIC_UUID[it]!!, PERMISSIONS_FOR_CHARACTERISTIC_UUID[it]!!).apply {
-                    addDescriptor(BluetoothGattDescriptor(CHARACTERISTIC_NOTIFICATION_DESCRIPTOR_UUID, BluetoothGattDescriptor.PERMISSION_WRITE))
-                })
-            }
-            gattServer.addService(service)
-        }
+            gattServer.addService(BluetoothGattService(it, BluetoothGattService.SERVICE_TYPE_PRIMARY).apply {
+                NUIMO_CHARACTERISTIC_UUIDS_FOR_SERVICE_UUID[it]!!.forEach {
+                    addCharacteristic(BluetoothGattCharacteristic(it, PROPERTIES_FOR_CHARACTERISTIC_UUID[it]!!, PERMISSIONS_FOR_CHARACTERISTIC_UUID[it]!!).apply {
+                        addDescriptor(BluetoothGattDescriptor(CHARACTERISTIC_NOTIFICATION_DESCRIPTOR_UUID, BluetoothGattDescriptor.PERMISSION_WRITE))})}})}
     }
 
     fun powerOff() {
