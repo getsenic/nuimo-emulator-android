@@ -1,3 +1,11 @@
+/**
+ *  Created by Lars Blumberg on 2/5/16.
+ *  Copyright © 2015 Senic. All rights reserved.
+ *
+ *  This software may be modified and distributed under the terms
+ *  of the MIT license.  See the LICENSE file for details. *
+ */
+
 package com.senic.nuimo.emulator
 
 import android.bluetooth.*
@@ -11,14 +19,6 @@ import android.os.BatteryManager
 import android.os.ParcelUuid
 import android.util.Log
 import java.util.*
-
-/**
- *  Created by Lars Blumberg on 2/5/16.
- *  Copyright © 2015 Senic. All rights reserved.
- *
- *  This software may be modified and distributed under the terms
- *  of the MIT license.  See the LICENSE file for details. *
- */
 
 class Nuimo(val context: Context) {
     companion object {
@@ -35,7 +35,7 @@ class Nuimo(val context: Context) {
     private val gattServer: BluetoothGattServer? = manager.openGattServer(context, NuimoGattServerCallback());
     private var isAdvertising = false
     private var connectedDevice: BluetoothDevice? = null
-    private var subscribedCharacteristics = HashSet<UUID>()
+    private var subscribedCharacteristics = HashMap<UUID, BluetoothGattCharacteristic>()
 
     fun addListener(listener: NuimoListener) {
         listeners.add(listener)
@@ -78,6 +78,28 @@ class Nuimo(val context: Context) {
         }
         Log.i(TAG, "SERVICE COUNT = " + gattServer?.services?.size)
     }
+
+    /*
+     * User input
+     */
+
+    fun pressButton() {
+        if (connectedDevice == null) return
+        val characteristic = subscribedCharacteristics[SENSOR_BUTTON_CHARACTERISTIC_UUID] ?: return
+        characteristic.value = byteArrayOf(1)
+        gattServer?.notifyCharacteristicChanged(connectedDevice, characteristic, false)
+    }
+
+    fun releaseButton() {
+        if (connectedDevice == null) return
+        val characteristic = subscribedCharacteristics[SENSOR_BUTTON_CHARACTERISTIC_UUID] ?: return
+        characteristic.value = byteArrayOf(0)
+        gattServer?.notifyCharacteristicChanged(connectedDevice, characteristic, false)
+    }
+
+    /*
+     * Bluetooth GATT Handling
+     */
 
     private fun startAdvertising() {
         if (advertiser == null) return
@@ -203,7 +225,7 @@ class Nuimo(val context: Context) {
             val responseStatus = when {
                 (PROPERTIES_FOR_CHARACTERISTIC_UUID[descriptor.characteristic.uuid] ?: 0) and BluetoothGattCharacteristic.PROPERTY_NOTIFY == 0 -> BluetoothGatt.GATT_WRITE_NOT_PERMITTED
                 value == null                                                                                              -> BluetoothGatt.GATT_REQUEST_NOT_SUPPORTED
-                Arrays.deepEquals(BluetoothGattDescriptor.ENABLE_NOTIFICATION_VALUE.toTypedArray(), value.toTypedArray())  -> { subscribedCharacteristics.add(descriptor.characteristic.uuid); BluetoothGatt.GATT_SUCCESS }
+                Arrays.deepEquals(BluetoothGattDescriptor.ENABLE_NOTIFICATION_VALUE.toTypedArray(), value.toTypedArray())  -> { subscribedCharacteristics[descriptor.characteristic.uuid] = descriptor.characteristic; BluetoothGatt.GATT_SUCCESS }
                 Arrays.deepEquals(BluetoothGattDescriptor.DISABLE_NOTIFICATION_VALUE.toTypedArray(), value.toTypedArray()) -> { subscribedCharacteristics.remove(descriptor.characteristic.uuid); BluetoothGatt.GATT_SUCCESS }
                 else                                                                                                       -> BluetoothGatt.GATT_REQUEST_NOT_SUPPORTED
             }

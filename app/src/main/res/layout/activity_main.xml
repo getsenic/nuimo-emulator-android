@@ -9,8 +9,8 @@
     android:paddingTop="@dimen/activity_vertical_margin"
     tools:context="com.senic.nuimo.emulator.MainActivity">
 
-    <TextView
-        android:layout_width="wrap_content"
-        android:layout_height="wrap_content"
-        android:text="Hello World!" />
+    <com.senic.nuimo.emulator.NuimoView
+        android:id="@+id/nuimo"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent" />
 </RelativeLayout>
