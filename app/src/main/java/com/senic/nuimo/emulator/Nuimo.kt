@@ -97,40 +97,35 @@ class Nuimo(val context: Context) {
      */
 
     fun pressButton() {
-        if (connectedDevice == null) return
-        val characteristic = subscribedCharacteristics[SENSOR_BUTTON_CHARACTERISTIC_UUID] ?: return
-        characteristic.value = byteArrayOf(1)
-        gattServer?.notifyCharacteristicChanged(connectedDevice, characteristic, false)
+        notifyCharacteristicChanged(SENSOR_BUTTON_CHARACTERISTIC_UUID, 1, BluetoothGattCharacteristic.FORMAT_UINT8)
     }
 
     fun releaseButton() {
-        if (connectedDevice == null) return
-        val characteristic = subscribedCharacteristics[SENSOR_BUTTON_CHARACTERISTIC_UUID] ?: return
-        characteristic.value = byteArrayOf(0)
-        gattServer?.notifyCharacteristicChanged(connectedDevice, characteristic, false)
+        notifyCharacteristicChanged(SENSOR_BUTTON_CHARACTERISTIC_UUID, 0, BluetoothGattCharacteristic.FORMAT_UINT8)
     }
 
     fun swipe(direction: NuimoSwipeDirection) {
-        if (connectedDevice == null) return
-        val characteristic = subscribedCharacteristics[SENSOR_TOUCH_CHARACTERISTIC_UUID] ?: return
-        characteristic.value = byteArrayOf(direction.gattByte)
-        gattServer?.notifyCharacteristicChanged(connectedDevice, characteristic, false)
+        notifyCharacteristicChanged(SENSOR_TOUCH_CHARACTERISTIC_UUID, direction.gattValue, BluetoothGattCharacteristic.FORMAT_UINT8)
     }
 
     fun rotate(value: Float) {
-        if (connectedDevice == null) return
-        val characteristic = subscribedCharacteristics[SENSOR_ROTATION_CHARACTERISTIC_UUID] ?: return
         accumulatedRotationValue += value
         when {
             accumulatedRotationValue == 0.0f -> return
             1.000000000f / (System.nanoTime() - lastRotationEventNanos) > MAX_ROTATION_EVENTS_PER_SEC -> return
         }
-        val valueToSend = (SINGLE_ROTATION_VALUE * accumulatedRotationValue).toInt()
-        characteristic.setValue(valueToSend, BluetoothGattCharacteristic.FORMAT_SINT16, 0)
-        gattServer?.notifyCharacteristicChanged(connectedDevice, characteristic, false)
-        //TODO: Reset only if notification was sent
-        accumulatedRotationValue = 0.0f
-        lastRotationEventNanos = System.nanoTime()
+        if (notifyCharacteristicChanged(SENSOR_ROTATION_CHARACTERISTIC_UUID, (SINGLE_ROTATION_VALUE * accumulatedRotationValue).toInt(), BluetoothGattCharacteristic.FORMAT_SINT16)) {
+            accumulatedRotationValue = 0.0f
+            lastRotationEventNanos = System.nanoTime()
+        }
+    }
+
+    private fun notifyCharacteristicChanged(characteristicUuid: UUID, value: Int, formatType: Int): Boolean {
+        if (gattServer == null)      return false
+        if (connectedDevice == null) return false
+        val characteristic = subscribedCharacteristics[characteristicUuid] ?: return false
+        characteristic.setValue(value, formatType, 0)
+        return gattServer.notifyCharacteristicChanged(connectedDevice, characteristic, false)
     }
 
     /*
@@ -170,7 +165,7 @@ class Nuimo(val context: Context) {
     }
 
     private inner class NuimoAdvertiseCallback : AdvertiseCallback() {
-        override fun onStartSuccess(settingsInEffect: AdvertiseSettings?) {
+        override fun onStartSuccess(settingsInEffect: AdvertiseSettings) {
             Log.i(TAG, "Advertising started")
         }
 
