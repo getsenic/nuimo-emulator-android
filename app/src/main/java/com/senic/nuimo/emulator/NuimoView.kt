@@ -9,6 +9,7 @@
 package com.senic.nuimo.emulator
 
 import android.content.Context
+import android.graphics.*
 import android.util.AttributeSet
 import android.util.Log
 import android.view.GestureDetector
@@ -22,9 +23,14 @@ class NuimoView(context: Context, attrs: AttributeSet?) : DialView(context, attr
 
     private var isFirstDrag = false
     private val gestureDetector = GestureDetector(context, GestureListener())
+    private var leds = booleanArrayOf()
+        set(value) {field = value; invalidate()}
+    private val ledPaint = Paint().apply { color = Color.argb(255,  255,  255,  255); flags = Paint.ANTI_ALIAS_FLAG }
 
     fun displayLedMatrix(leds: BooleanArray, brightness: Float, displayInterval: Float) {
-        Log.i("NuimoView", leds.map { if (it) "*" else " "  }.reduce { t, s -> t + s } + ", " + brightness + ", " + displayInterval)
+        ledPaint.alpha = Math.max(0, Math.min(255, (255 * brightness).toInt()))
+        this.leds = leds
+        //TODO: Fade LEDs out after display interval
     }
 
     override fun onSizeChanged(w: Int, h: Int, oldw: Int, oldh: Int) {
@@ -55,6 +61,22 @@ class NuimoView(context: Context, attrs: AttributeSet?) : DialView(context, attr
         if      (delta >  0.5) delta = 1 - delta
         else if (delta < -0.5) delta = 1 + delta
         gestureEventListener?.onRotate(delta)
+    }
+
+    override fun onDraw(canvas: Canvas) {
+        super.onDraw(canvas)
+        if (!isEnabled) return
+
+        val size = Math.min(width, height) * 0.2f
+        val left = (width - size) / 2.0f
+        val top = (height - size) / 2.0f
+        val ledSize = size * 0.09f
+        val padding = (size - 9 * ledSize) / 8
+
+        (0..8).forEach { row ->
+            (0..8).forEach { col ->
+                if (leds.getOrElse(row * 9 + col, { false })) {
+                    canvas.drawCircle(left + col * (ledSize + padding) + ledSize / 2.0f, top + row * (ledSize + padding) + ledSize / 2.0f, ledSize / 2.0f, ledPaint)}}}
     }
 
     interface GestureEventListener {
