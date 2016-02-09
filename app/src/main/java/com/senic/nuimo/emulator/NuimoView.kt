@@ -10,6 +10,7 @@ package com.senic.nuimo.emulator
 
 import android.content.Context
 import android.util.AttributeSet
+import android.util.Log
 import android.view.GestureDetector
 import android.view.MotionEvent
 
@@ -21,6 +22,10 @@ class NuimoView(context: Context, attrs: AttributeSet?) : DialView(context, attr
 
     private var isFirstDrag = false
     private val gestureDetector = GestureDetector(context, GestureListener())
+
+    fun displayLedMatrix(leds: BooleanArray, brightness: Float, displayInterval: Float) {
+        Log.i("NuimoView", leds.map { if (it) "*" else " "  }.reduce { t, s -> t + s } + ", " + brightness + ", " + displayInterval)
+    }
 
     override fun onSizeChanged(w: Int, h: Int, oldw: Int, oldh: Int) {
         val nuimoSize = Math.min(w, h)

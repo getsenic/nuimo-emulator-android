@@ -231,6 +231,13 @@ class Nuimo(val context: Context) {
                         else                              -> BluetoothGatt.GATT_SUCCESS
                     }
                     gattServer?.sendResponse(device, requestId, errorCode, 0, byteArrayOf())
+                    if (errorCode == BluetoothGatt.GATT_SUCCESS) {
+                        val leds = value!!.slice(0..10).flatMap {
+                            val i = it.toInt() and 0xFF
+                            ((0..7).map { i and (1 shl it) > 0 })
+                        }.toBooleanArray()
+                        listeners.forEach { it.onReceiveLedMatrix(leds, (value[11].toInt() and 0xFF) / 255.0f, (value[12].toInt() and 0xFF) / 10.0f) }
+                    }
                 }
                 else -> {
                     Log.i(TAG, "SEND UNKNOWN WRITE RESPONSE")
@@ -286,6 +293,7 @@ enum class NuimoSwipeDirection(val gattValue: Int) {
 interface NuimoListener {
     fun onConnect(device: BluetoothDevice)
     fun onDisconnect(device: BluetoothDevice)
+    fun onReceiveLedMatrix(leds: BooleanArray, brightness: Float, displayInterval: Float)
 }
 
 /*

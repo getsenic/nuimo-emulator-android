@@ -44,6 +44,10 @@ class MainActivity : AppCompatActivity(), NuimoListener, NuimoView.GestureEventL
         runOnUiThread { Toast.makeText(this, "Disconnected from ${device.address}", Toast.LENGTH_SHORT).show() }
     }
 
+    override fun onReceiveLedMatrix(leds: BooleanArray, brightness: Float, displayInterval: Float) {
+        runOnUiThread { nuimoView.displayLedMatrix(leds, brightness, displayInterval) }
+    }
+
     /*
      * NuimoView.GestureEventListener
      */
