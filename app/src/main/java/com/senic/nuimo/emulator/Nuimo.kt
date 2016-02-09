@@ -105,7 +105,7 @@ class Nuimo(val context: Context) {
         accumulatedRotationValue += value
         when {
             accumulatedRotationValue == 0.0f -> return
-            1.000000000f / (System.nanoTime() - lastRotationEventNanos) > MAX_ROTATION_EVENTS_PER_SEC -> return
+            1000000000.0f / (System.nanoTime() - lastRotationEventNanos) > MAX_ROTATION_EVENTS_PER_SEC -> return
         }
         if (notifyCharacteristicChanged(SENSOR_ROTATION_CHARACTERISTIC_UUID, (SINGLE_ROTATION_VALUE * accumulatedRotationValue).toInt(), BluetoothGattCharacteristic.FORMAT_SINT16)) {
             accumulatedRotationValue = 0.0f
