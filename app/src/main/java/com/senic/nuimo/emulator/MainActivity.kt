@@ -47,6 +47,7 @@ class MainActivity : AppCompatActivity(), NuimoListener, NuimoView.GestureEventL
 
     private fun powerOff() {
         nuimo.powerOff()
+        nuimoView.isEnabled = false
     }
 
     /*

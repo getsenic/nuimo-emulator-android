@@ -32,10 +32,11 @@ class Nuimo(val context: Context) {
 
     private val name = "Nuimo"
     private val manager = context.getSystemService(Context.BLUETOOTH_SERVICE) as BluetoothManager
-    private val adapter: BluetoothAdapter? = BluetoothAdapter.getDefaultAdapter()
+    private val gattServer: BluetoothGattServer? = manager.openGattServer(context, NuimoGattServerCallback());
+    private val adapter: BluetoothAdapter? = manager.adapter
+    private val addedServices = HashSet<UUID>()
     private val advertiser = adapter?.bluetoothLeAdvertiser
     private val advertiserListener = NuimoAdvertiseCallback()
-    private val gattServer: BluetoothGattServer? = manager.openGattServer(context, NuimoGattServerCallback());
     private var isAdvertising = false
     private var connectedDevice: BluetoothDevice? = null
     private var subscribedCharacteristics = HashMap<UUID, BluetoothGattCharacteristic>()
@@ -69,14 +70,14 @@ class Nuimo(val context: Context) {
     private fun reset() {
         Log.i(TAG, "RESET")
         stopAdvertising()
+        addedServices.clear()
+        gattServer?.clearServices()
         accumulatedRotationValue = 0.0f
         subscribedCharacteristics.clear()
-        gattServer?.clearServices()
         if (connectedDevice != null) {
             disconnect(connectedDevice!!)
             connectedDevice = null
         }
-        Log.i(TAG, "SERVICE COUNT = " + gattServer?.services?.size)
     }
 
     private fun disconnect(device: BluetoothDevice) {
@@ -172,8 +173,9 @@ class Nuimo(val context: Context) {
 
     private inner class NuimoGattServerCallback : BluetoothGattServerCallback() {
         override fun onServiceAdded(status: Int, service: BluetoothGattService) {
-            Log.i(TAG, "SERVICE ${service.uuid} ADDED, count= " + gattServer?.services?.size)
-            if (gattServer?.services?.size == NUIMO_SERVICE_UUIDS.size) {
+            addedServices.add(service.uuid)
+            Log.i(TAG, "SERVICE ${service.uuid} ADDED, count= " + addedServices.size)
+            if (addedServices.size == NUIMO_SERVICE_UUIDS.size) {
                 startAdvertising()
             }
         }
