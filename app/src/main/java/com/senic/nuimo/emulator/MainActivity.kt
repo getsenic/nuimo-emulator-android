@@ -22,26 +22,56 @@ class MainActivity : AppCompatActivity(), NuimoListener, NuimoView.GestureEventL
 
         nuimoView.gestureEventListener = this
 
-        //TODO: Add UI switch for power on/off
-        nuimo.powerOn()
+        powerOn()
     }
 
     override fun onDestroy() {
-        nuimo.powerOff()
+        powerOff()
 
         super.onDestroy()
+    }
+
+    private fun powerOn() {
+        nuimo.powerOn()
+        nuimoView.isEnabled = true
+        nuimoView.displayLedMatrix(intArrayOf(
+                0, 0, 0, 0, 0, 0, 0, 0, 0,
+                0, 0, 1, 1, 0, 1, 1, 0, 0,
+                0, 1, 1, 1, 1, 1, 1, 1, 0,
+                1, 1, 1, 1, 1, 1, 1, 1, 1,
+                1, 1, 1, 1, 1, 1, 1, 1, 1,
+                0, 1, 1, 1, 1, 1, 1, 1, 0,
+                0, 0, 1, 1, 1, 1, 1, 0, 0,
+                0, 0, 0, 1, 1, 1, 0, 0, 0,
+                0, 0, 0, 0, 1, 0, 0, 0, 0).map { it == 1 }.toBooleanArray(), 1.0f, 0.0f)
+    }
+
+    private fun powerOff() {
+        nuimo.powerOff()
     }
 
     /*
      * NuimoListener
      */
 
+    override fun onStartAdvertising() {
+        //TODO: Provide UI feedback (e.g. some label)
+    }
+
+    override fun onStopAdvertising() {
+        //TODO: Update UI
+    }
+
+    override fun onStartAdvertisingFailure(errorCode: Int) {
+        runOnUiThread { Toast.makeText(this, "BLE advertising not supported by this device", Toast.LENGTH_LONG).show() }
+    }
+
     override fun onConnect(device: BluetoothDevice) {
-        runOnUiThread { Toast.makeText(this, "Connected to ${device.address}", Toast.LENGTH_SHORT).show() }
+        runOnUiThread { Toast.makeText(this, "Connected to ${device.address}", Toast.LENGTH_LONG).show() }
     }
 
     override fun onDisconnect(device: BluetoothDevice) {
-        runOnUiThread { Toast.makeText(this, "Disconnected from ${device.address}", Toast.LENGTH_SHORT).show() }
+        runOnUiThread { Toast.makeText(this, "Disconnected from ${device.address}", Toast.LENGTH_LONG).show() }
     }
 
     override fun onReceiveLedMatrix(leds: BooleanArray, brightness: Float, displayInterval: Float) {

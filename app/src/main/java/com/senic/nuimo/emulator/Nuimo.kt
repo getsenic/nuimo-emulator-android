@@ -162,16 +162,18 @@ class Nuimo(val context: Context) {
         Log.i(TAG, "STOP ADVERTISING")
 
         advertiser.stopAdvertising(advertiserListener)
+        listeners.forEach { it.onStopAdvertising() }
     }
 
     private inner class NuimoAdvertiseCallback : AdvertiseCallback() {
         override fun onStartSuccess(settingsInEffect: AdvertiseSettings) {
             Log.i(TAG, "Advertising started")
+            listeners.forEach { it.onStartAdvertising() }
         }
 
         override fun onStartFailure(errorCode: Int) {
             Log.i(TAG, "Cannot advertise, error: $errorCode")
-            //TODO: Notify listener
+            listeners.forEach { it.onStartAdvertisingFailure(errorCode) }
         }
     }
 
@@ -291,6 +293,9 @@ enum class NuimoSwipeDirection(val gattValue: Int) {
 }
 
 interface NuimoListener {
+    fun onStartAdvertising()
+    fun onStartAdvertisingFailure(errorCode: Int)
+    fun onStopAdvertising()
     fun onConnect(device: BluetoothDevice)
     fun onDisconnect(device: BluetoothDevice)
     fun onReceiveLedMatrix(leds: BooleanArray, brightness: Float, displayInterval: Float)
