@@ -13,15 +13,17 @@ import android.util.AttributeSet
 import android.view.GestureDetector
 import android.view.MotionEvent
 
-class NuimoView(context: Context, attrs: AttributeSet?) : DialView(context, attrs) {
+class NuimoView(context: Context, attrs: AttributeSet?) : DialView(context, attrs), DialView.DialListener {
 
     var gestureEventListener: GestureEventListener? = null
 
+    override var dialListener: DialListener? = this
+
+    private var isFirstDrag = false
     private val gestureDetector = GestureDetector(context, GestureListener())
 
     override fun onSizeChanged(w: Int, h: Int, oldw: Int, oldh: Int) {
         val nuimoSize = Math.min(w, h)
-
         ringSize = (nuimoSize * 0.11f).toInt()
         handleSize = (ringSize * 1.5).toInt()
     }
@@ -31,6 +33,23 @@ class NuimoView(context: Context, attrs: AttributeSet?) : DialView(context, attr
             true  -> true /* Dial ring is rotated */
             false -> gestureDetector.onTouchEvent(event)
         }
+    }
+
+    override fun onStartDragging() {
+        isFirstDrag = true
+    }
+
+    override fun onEndDragging() { }
+
+    override fun onChangeValue(value: Float, oldValue: Float) {
+        if (isFirstDrag) {
+            isFirstDrag = false
+            return
+        }
+        var delta = value - oldValue
+        if      (delta >  0.5) delta = 1 - delta
+        else if (delta < -0.5) delta = 1 + delta
+        gestureEventListener?.onRotate(delta)
     }
 
     interface GestureEventListener {

@@ -64,6 +64,7 @@ class MainActivity : AppCompatActivity(), NuimoListener, NuimoView.GestureEventL
     }
 
     override fun onRotate(value: Float) {
+        Log.i(TAG, "onRotate $value")
         //TODO: Call nuimo.rotate() method
     }
 }

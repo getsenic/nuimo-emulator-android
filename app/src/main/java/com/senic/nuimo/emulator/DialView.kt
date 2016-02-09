@@ -19,9 +19,21 @@ import android.view.View
 open class DialView(context: Context, attrs: AttributeSet?) : View(context, attrs) {
 
     var ringSize = 40
-    var handleSize = 50
-    var value = 0.0f
         set(value) {field = value; invalidate()}
+
+    var handleSize = 50
+        set(value) {field = value; invalidate()}
+
+    var value = 0.0f
+        set(value) {
+            if (field == value) return
+            val oldValue = field
+            field = value
+            invalidate()
+            dialListener?.onChangeValue(value, oldValue)
+        }
+
+    open var dialListener: DialListener? = null
 
     private var isDragging = false
     //TODO: Provide color properties as XML layout attributes
@@ -34,14 +46,25 @@ open class DialView(context: Context, attrs: AttributeSet?) : View(context, attr
 
     override fun onTouchEvent(event: MotionEvent): Boolean {
         when (event.actionMasked) {
-            MotionEvent.ACTION_DOWN -> isDragging = isEnabled && Math.sqrt(Math.pow(event.x - width / 2.0, 2.0) + Math.pow(height / 2.0 - event.y, 2.0)) > (rotationSize - Math.max(handleSize, ringSize)) / 2.0
-            MotionEvent.ACTION_MOVE -> if (isDragging) {
-                val pos = (Math.atan2(event.x - width / 2.0, height / 2.0 - event.y) / 2.0 / Math.PI).toFloat()
-                value = pos + if (pos >= 0) 0.0f else 1.0f
+            MotionEvent.ACTION_DOWN -> if (isEnabled && (Math.abs(Math.sqrt(Math.pow(event.x - width / 2.0, 2.0) + Math.pow(height / 2.0 - event.y, 2.0)) - rotationSize / 2.0) < Math.max(handleSize, ringSize) / 2.0f)) {
+                isDragging = true
+                dialListener?.onStartDragging()
+                performDrag(event.x, event.y)
             }
-            MotionEvent.ACTION_UP -> isDragging = false
+            MotionEvent.ACTION_MOVE ->  if (isDragging) {
+                performDrag(event.x, event.y)
+            }
+            MotionEvent.ACTION_UP -> if (isDragging) {
+                isDragging = false
+                dialListener?.onEndDragging()
+            }
         }
         return isDragging
+    }
+
+    private fun performDrag(x: Float, y: Float) {
+        val pos = (Math.atan2(x - width / 2.0, height / 2.0 - y) / 2.0 / Math.PI).toFloat()
+        value = pos + if (pos >= 0) 0.0f else 1.0f
     }
 
     override fun onDraw(canvas: Canvas) {
@@ -60,5 +83,11 @@ open class DialView(context: Context, attrs: AttributeSet?) : View(context, attr
 
             canvas.drawCircle(centerX + deltaX, centerY - deltaY, handleSize / 2.0f, handlePaint)
         }
+    }
+
+    interface DialListener {
+        fun onChangeValue(value: Float, oldValue: Float)
+        fun onStartDragging()
+        fun onEndDragging()
     }
 }
