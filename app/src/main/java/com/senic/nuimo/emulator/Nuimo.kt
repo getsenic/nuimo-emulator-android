@@ -27,9 +27,10 @@ class Nuimo(val context: Context) {
         val SINGLE_ROTATION_VALUE = 2800
     }
 
-    val name = "Nuimo"
 
-    private val listeners = ArrayList<NuimoListener>()
+    var listener: NuimoListener? = null
+
+    private val name = "Nuimo"
     private val manager = context.getSystemService(Context.BLUETOOTH_SERVICE) as BluetoothManager
     private val adapter: BluetoothAdapter? = BluetoothAdapter.getDefaultAdapter()
     private val advertiser = adapter?.bluetoothLeAdvertiser
@@ -40,14 +41,6 @@ class Nuimo(val context: Context) {
     private var subscribedCharacteristics = HashMap<UUID, BluetoothGattCharacteristic>()
     private var accumulatedRotationValue = 0.0f
     private var lastRotationEventNanos = System.nanoTime()
-
-    fun addListener(listener: NuimoListener) {
-        listeners.add(listener)
-    }
-
-    fun removeListener(listener: NuimoListener) {
-        listeners.remove(listener)
-    }
 
     fun powerOn() {
         if (adapter == null || advertiser == null || gattServer == null) {
@@ -89,7 +82,7 @@ class Nuimo(val context: Context) {
     private fun disconnect(device: BluetoothDevice) {
         gattServer?.cancelConnection(device)
         subscribedCharacteristics.clear()
-        listeners.forEach { it.onDisconnect(device) }
+        listener?.onDisconnect(device)
     }
 
     /*
@@ -162,18 +155,18 @@ class Nuimo(val context: Context) {
         Log.i(TAG, "STOP ADVERTISING")
 
         advertiser.stopAdvertising(advertiserListener)
-        listeners.forEach { it.onStopAdvertising() }
+        listener?.onStopAdvertising()
     }
 
     private inner class NuimoAdvertiseCallback : AdvertiseCallback() {
         override fun onStartSuccess(settingsInEffect: AdvertiseSettings) {
             Log.i(TAG, "Advertising started")
-            listeners.forEach { it.onStartAdvertising() }
+            listener?.onStartAdvertising()
         }
 
         override fun onStartFailure(errorCode: Int) {
             Log.i(TAG, "Cannot advertise, error: $errorCode")
-            listeners.forEach { it.onStartAdvertisingFailure(errorCode) }
+            listener?.onStartAdvertisingFailure(errorCode)
         }
     }
 
@@ -201,7 +194,7 @@ class Nuimo(val context: Context) {
                 newState == BluetoothGatt.STATE_DISCONNECTED  -> connectedDevice = null
             }
             when {
-                connectedDevice != null && previousConnectedDevice == null -> listeners.forEach { it.onConnect(connectedDevice!!) }
+                connectedDevice != null && previousConnectedDevice == null -> listener?.onConnect(connectedDevice!!)
                 connectedDevice == null && previousConnectedDevice != null -> { disconnect(previousConnectedDevice); startAdvertising() }
                 connectedDevice == null && previousConnectedDevice == null -> startAdvertising()
             }
@@ -238,7 +231,7 @@ class Nuimo(val context: Context) {
                             val i = it.toInt() and 0xFF
                             ((0..7).map { i and (1 shl it) > 0 })
                         }.toBooleanArray()
-                        listeners.forEach { it.onReceiveLedMatrix(leds, (value[11].toInt() and 0xFF) / 255.0f, (value[12].toInt() and 0xFF) / 10.0f) }
+                        listener?.onReceiveLedMatrix(leds, (value[11].toInt() and 0xFF) / 255.0f, (value[12].toInt() and 0xFF) / 10.0f)
                     }
                 }
                 else -> {

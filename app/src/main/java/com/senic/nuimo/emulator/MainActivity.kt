@@ -3,7 +3,6 @@ package com.senic.nuimo.emulator
 import android.bluetooth.BluetoothDevice
 import android.support.v7.app.AppCompatActivity
 import android.os.Bundle
-import android.util.Log
 import android.widget.Toast
 import butterknife.bindView
 
@@ -12,7 +11,7 @@ class MainActivity : AppCompatActivity(), NuimoListener, NuimoView.GestureEventL
         val TAG = "Nuimo.MainActivity"
     }
 
-    val nuimo: Nuimo by lazy{ Nuimo(this).apply{ addListener(this@MainActivity) } }
+    val nuimo: Nuimo by lazy{ Nuimo(this).apply{ listener = this@MainActivity } }
 
     val nuimoView: NuimoView by bindView(R.id.nuimo)
 
