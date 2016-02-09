@@ -49,22 +49,18 @@ class MainActivity : AppCompatActivity(), NuimoListener, NuimoView.GestureEventL
      */
 
     override fun onButtonPress() {
-        Log.i(TAG, "onButtonPress")
         nuimo.pressButton()
     }
 
     override fun onButtonRelease() {
-        Log.i(TAG, "onButtonRelease")
         nuimo.releaseButton()
     }
 
     override fun onSwipe(direction: NuimoSwipeDirection) {
-        Log.i(TAG, "onSwipe $direction")
         nuimo.swipe(direction)
     }
 
     override fun onRotate(value: Float) {
-        Log.i(TAG, "onRotate $value")
-        //TODO: Call nuimo.rotate() method
+        nuimo.rotate(value)
     }
 }

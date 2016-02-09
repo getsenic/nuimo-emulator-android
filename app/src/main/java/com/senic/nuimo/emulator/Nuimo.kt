@@ -23,6 +23,8 @@ import java.util.*
 class Nuimo(val context: Context) {
     companion object {
         val TAG = "Nuimo"
+        val MAX_ROTATION_EVENTS_PER_SEC = 10
+        val SINGLE_ROTATION_VALUE = 2800
     }
 
     val name = "Nuimo"
@@ -36,6 +38,8 @@ class Nuimo(val context: Context) {
     private var isAdvertising = false
     private var connectedDevice: BluetoothDevice? = null
     private var subscribedCharacteristics = HashMap<UUID, BluetoothGattCharacteristic>()
+    private var accumulatedRotationValue = 0.0f
+    private var lastRotationEventNanos = System.nanoTime()
 
     fun addListener(listener: NuimoListener) {
         listeners.add(listener)
@@ -58,8 +62,11 @@ class Nuimo(val context: Context) {
         NUIMO_SERVICE_UUIDS.forEach {
             gattServer.addService(BluetoothGattService(it, BluetoothGattService.SERVICE_TYPE_PRIMARY).apply {
                 NUIMO_CHARACTERISTIC_UUIDS_FOR_SERVICE_UUID[it]!!.forEach {
-                    addCharacteristic(BluetoothGattCharacteristic(it, PROPERTIES_FOR_CHARACTERISTIC_UUID[it]!!, PERMISSIONS_FOR_CHARACTERISTIC_UUID[it]!!).apply {
-                        addDescriptor(BluetoothGattDescriptor(CHARACTERISTIC_NOTIFICATION_DESCRIPTOR_UUID, BluetoothGattDescriptor.PERMISSION_WRITE))})}})}
+                    val properties = PROPERTIES_FOR_CHARACTERISTIC_UUID[it]!!
+                    val permissions = PERMISSIONS_FOR_CHARACTERISTIC_UUID[it]!!
+                    addCharacteristic(BluetoothGattCharacteristic(it, properties, permissions).apply {
+                        if (properties and BluetoothGattCharacteristic.PROPERTY_NOTIFY > 0) {
+                            addDescriptor(BluetoothGattDescriptor(CHARACTERISTIC_NOTIFICATION_DESCRIPTOR_UUID, BluetoothGattDescriptor.PERMISSION_WRITE))}})}})}
     }
 
     fun powerOff() {
@@ -69,14 +76,20 @@ class Nuimo(val context: Context) {
     private fun reset() {
         Log.i(TAG, "RESET")
         stopAdvertising()
+        accumulatedRotationValue = 0.0f
         subscribedCharacteristics.clear()
-        gattServer?.apply {
-            clearServices()
-            if (connectedDevice != null) {
-                cancelConnection(connectedDevice)
-            }
+        gattServer?.clearServices()
+        if (connectedDevice != null) {
+            disconnect(connectedDevice!!)
+            connectedDevice = null
         }
         Log.i(TAG, "SERVICE COUNT = " + gattServer?.services?.size)
+    }
+
+    private fun disconnect(device: BluetoothDevice) {
+        gattServer?.cancelConnection(device)
+        subscribedCharacteristics.clear()
+        listeners.forEach { it.onDisconnect(device) }
     }
 
     /*
@@ -102,6 +115,22 @@ class Nuimo(val context: Context) {
         val characteristic = subscribedCharacteristics[SENSOR_TOUCH_CHARACTERISTIC_UUID] ?: return
         characteristic.value = byteArrayOf(direction.gattByte)
         gattServer?.notifyCharacteristicChanged(connectedDevice, characteristic, false)
+    }
+
+    fun rotate(value: Float) {
+        if (connectedDevice == null) return
+        val characteristic = subscribedCharacteristics[SENSOR_ROTATION_CHARACTERISTIC_UUID] ?: return
+        accumulatedRotationValue += value
+        when {
+            accumulatedRotationValue == 0.0f -> return
+            1.000000000f / (System.nanoTime() - lastRotationEventNanos) > MAX_ROTATION_EVENTS_PER_SEC -> return
+        }
+        val valueToSend = (SINGLE_ROTATION_VALUE * accumulatedRotationValue).toInt()
+        characteristic.setValue(valueToSend, BluetoothGattCharacteristic.FORMAT_SINT16, 0)
+        gattServer?.notifyCharacteristicChanged(connectedDevice, characteristic, false)
+        //TODO: Reset only if notification was sent
+        accumulatedRotationValue = 0.0f
+        lastRotationEventNanos = System.nanoTime()
     }
 
     /*
@@ -160,31 +189,24 @@ class Nuimo(val context: Context) {
         }
 
         override fun onConnectionStateChange(device: BluetoothDevice, status: Int, newState: Int) {
+            Log.i(TAG, "Connection state changed for device ${device.address} new state: $newState")
             // Only allow one connection, refuse all other connection requests
             if (connectedDevice != null && connectedDevice != device) {
                 gattServer?.cancelConnection(device)
                 return
             }
             val previousConnectedDevice = connectedDevice
-            if (status != BluetoothGatt.GATT_SUCCESS) {
-                // Cancel connection on error
-                connectedDevice = null
+            when {
+                status   != BluetoothGatt.GATT_SUCCESS        -> connectedDevice = null
+                newState == BluetoothGatt.STATE_CONNECTING    -> stopAdvertising()
+                newState == BluetoothGatt.STATE_CONNECTED     -> connectedDevice = device
+                newState == BluetoothGatt.STATE_DISCONNECTING -> connectedDevice = null
+                newState == BluetoothGatt.STATE_DISCONNECTED  -> connectedDevice = null
             }
-            else {
-                when (newState) {
-                    BluetoothGatt.STATE_CONNECTING    -> stopAdvertising()
-                    BluetoothGatt.STATE_CONNECTED     -> connectedDevice = device
-                    BluetoothGatt.STATE_DISCONNECTING -> connectedDevice = null
-                    BluetoothGatt.STATE_DISCONNECTED  -> connectedDevice = null
-                }
-            }
-            if (previousConnectedDevice == null && connectedDevice != null) {
-                listeners.forEach { it.onConnect(connectedDevice!!) }
-            }
-            else if (previousConnectedDevice != null && connectedDevice == null) {
-                subscribedCharacteristics.clear()
-                startAdvertising()
-                listeners.forEach { it.onDisconnect(previousConnectedDevice) }
+            when {
+                connectedDevice != null && previousConnectedDevice == null -> listeners.forEach { it.onConnect(connectedDevice!!) }
+                connectedDevice == null && previousConnectedDevice != null -> { disconnect(previousConnectedDevice); startAdvertising() }
+                connectedDevice == null && previousConnectedDevice == null -> startAdvertising()
             }
         }
 
@@ -262,7 +284,7 @@ class Nuimo(val context: Context) {
     }
 }
 
-enum class NuimoSwipeDirection(val gattByte: Byte) {
+enum class NuimoSwipeDirection(val gattValue: Int) {
     LEFT(0), RIGHT(1), UP(2), DOWN(3)
 }
 

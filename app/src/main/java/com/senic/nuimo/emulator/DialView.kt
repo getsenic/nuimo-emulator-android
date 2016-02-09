@@ -45,6 +45,7 @@ open class DialView(context: Context, attrs: AttributeSet?) : View(context, attr
     private val rotationSize: Int get() = size - Math.max(handleSize, ringSize)
 
     override fun onTouchEvent(event: MotionEvent): Boolean {
+        val wasDragging = isDragging
         when (event.actionMasked) {
             MotionEvent.ACTION_DOWN -> if (isEnabled && (Math.abs(Math.sqrt(Math.pow(event.x - width / 2.0, 2.0) + Math.pow(height / 2.0 - event.y, 2.0)) - rotationSize / 2.0) < Math.max(handleSize, ringSize) / 2.0f)) {
                 isDragging = true
@@ -59,7 +60,7 @@ open class DialView(context: Context, attrs: AttributeSet?) : View(context, attr
                 dialListener?.onEndDragging()
             }
         }
-        return isDragging
+        return isDragging || wasDragging
     }
 
     private fun performDrag(x: Float, y: Float) {

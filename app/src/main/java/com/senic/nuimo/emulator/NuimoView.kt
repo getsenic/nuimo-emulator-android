@@ -79,8 +79,8 @@ class NuimoView(context: Context, attrs: AttributeSet?) : DialView(context, attr
                     if (Math.abs(diffX) > Math.abs(diffY)) {
                         when {
                             Math.abs(diffX) < minSwipeDistance || Math.abs(velocityX) < minSwipeVelocity -> null
-                            diffX > 0 -> NuimoSwipeDirection.LEFT
-                            else      -> NuimoSwipeDirection.RIGHT
+                            diffX > 0 -> NuimoSwipeDirection.RIGHT
+                            else      -> NuimoSwipeDirection.LEFT
                         }
                     } else {
                         when {
