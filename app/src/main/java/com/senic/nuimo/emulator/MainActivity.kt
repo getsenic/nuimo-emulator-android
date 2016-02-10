@@ -3,6 +3,7 @@ package com.senic.nuimo.emulator
 import android.bluetooth.BluetoothDevice
 import android.support.v7.app.AppCompatActivity
 import android.os.Bundle
+import android.widget.TextView
 import android.widget.Toast
 import butterknife.bindView
 
@@ -14,6 +15,7 @@ class MainActivity : AppCompatActivity(), NuimoListener, NuimoView.GestureEventL
     val nuimo: Nuimo by lazy{ Nuimo(this).apply{ listener = this@MainActivity } }
 
     val nuimoView: NuimoView by bindView(R.id.nuimo)
+    val statusTextView: TextView by bindView(R.id.status)
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -50,16 +52,24 @@ class MainActivity : AppCompatActivity(), NuimoListener, NuimoView.GestureEventL
         nuimoView.isEnabled = false
     }
 
+    private fun updateStatusLabel() {
+        statusTextView.text = when {
+            nuimo.connectedDevice != null -> "Connected to ${(nuimo.connectedDevice as BluetoothDevice).address}"
+            nuimo.isAdvertising           -> "Advertising (waiting for connection requests)"
+            else                          -> ""
+        }
+    }
+
     /*
      * NuimoListener
      */
 
     override fun onStartAdvertising() {
-        //TODO: Provide UI feedback (e.g. some label)
+        updateStatusLabel()
     }
 
     override fun onStopAdvertising() {
-        //TODO: Update UI
+        updateStatusLabel()
     }
 
     override fun onStartAdvertisingFailure(errorCode: Int) {
@@ -67,11 +77,17 @@ class MainActivity : AppCompatActivity(), NuimoListener, NuimoView.GestureEventL
     }
 
     override fun onConnect(device: BluetoothDevice) {
-        runOnUiThread { Toast.makeText(this, "Connected to ${device.address}", Toast.LENGTH_LONG).show() }
+        runOnUiThread {
+            updateStatusLabel()
+            Toast.makeText(this, "Connected to ${device.address}", Toast.LENGTH_LONG).show()
+        }
     }
 
     override fun onDisconnect(device: BluetoothDevice) {
-        runOnUiThread { Toast.makeText(this, "Disconnected from ${device.address}", Toast.LENGTH_LONG).show() }
+        runOnUiThread {
+            updateStatusLabel()
+            Toast.makeText(this, "Disconnected from ${device.address}", Toast.LENGTH_LONG).show()
+        }
     }
 
     override fun onReceiveLedMatrix(leds: BooleanArray, brightness: Float, displayInterval: Float) {

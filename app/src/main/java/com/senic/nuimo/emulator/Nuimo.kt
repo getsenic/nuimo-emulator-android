@@ -27,8 +27,11 @@ class Nuimo(val context: Context) {
         val SINGLE_ROTATION_VALUE = 2800
     }
 
-
     var listener: NuimoListener? = null
+    var isAdvertising = false
+        private set
+    var connectedDevice: BluetoothDevice? = null
+        private set
 
     private val name = "Nuimo"
     private val manager = context.getSystemService(Context.BLUETOOTH_SERVICE) as BluetoothManager
@@ -37,8 +40,6 @@ class Nuimo(val context: Context) {
     private val addedServices = HashSet<UUID>()
     private val advertiser = adapter?.bluetoothLeAdvertiser
     private val advertiserListener = NuimoAdvertiseCallback()
-    private var isAdvertising = false
-    private var connectedDevice: BluetoothDevice? = null
     private var subscribedCharacteristics = HashMap<UUID, BluetoothGattCharacteristic>()
     private var accumulatedRotationValue = 0.0f
     private var lastRotationEventNanos = System.nanoTime()
