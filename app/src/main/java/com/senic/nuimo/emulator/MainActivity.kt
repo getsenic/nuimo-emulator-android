@@ -33,7 +33,11 @@ class MainActivity : AppCompatActivity(), NuimoListener, NuimoView.GestureEventL
     }
 
     private fun powerOn() {
-        nuimo.powerOn()
+        if (!nuimo.powerOn()) {
+            statusTextView.text = "Your Android device does not support bluetooth advertising (peripheral mode). Please use a different Android device to run the Nuimo emulator."
+            return
+        }
+
         nuimoView.isEnabled = true
         nuimoView.displayLedMatrix(intArrayOf(
                 0, 0, 0, 0, 0, 0, 0, 0, 0,

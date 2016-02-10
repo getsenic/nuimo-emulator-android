@@ -44,10 +44,9 @@ class Nuimo(val context: Context) {
     private var accumulatedRotationValue = 0.0f
     private var lastRotationEventNanos = System.nanoTime()
 
-    fun powerOn() {
+    fun powerOn(): Boolean {
         if (adapter == null || advertiser == null || gattServer == null) {
-            //TODO: Notify listener about error
-            return
+            return false
         }
 
         reset()
@@ -62,6 +61,8 @@ class Nuimo(val context: Context) {
                     addCharacteristic(BluetoothGattCharacteristic(it, properties, permissions).apply {
                         if (properties and BluetoothGattCharacteristic.PROPERTY_NOTIFY > 0) {
                             addDescriptor(BluetoothGattDescriptor(CHARACTERISTIC_NOTIFICATION_DESCRIPTOR_UUID, BluetoothGattDescriptor.PERMISSION_WRITE))}})}})}
+
+        return true
     }
 
     fun powerOff() {
