@@ -17,6 +17,7 @@ Alternatively you can <a href="https://senic.com/developers">download and instal
 
 - Not all Android devices support the emulator mode (advertising in peripheral mode). In that case the emulator app will let you know.
 - Even after stopping the app, your Android device will still be discovered as a Nuimo device. But you won't be able to connect. Simply restart your Android's bluetooth.
+- Fly events are not yet supported and will be added soon.
 
 ## Support
 
