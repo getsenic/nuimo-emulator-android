@@ -22,38 +22,20 @@ class MainActivity : AppCompatActivity(), NuimoListener, NuimoView.GestureEventL
         setContentView(R.layout.activity_main)
 
         nuimoView.gestureEventListener = this
+        nuimoView.isEnabled = false
 
-        powerOn()
-    }
-
-    override fun onDestroy() {
-        powerOff()
-
-        super.onDestroy()
-    }
-
-    private fun powerOn() {
-        if (!nuimo.powerOn()) {
+        if (!nuimo.bluetoothSupported) {
             statusTextView.text = "Your Android device does not support bluetooth advertising (peripheral mode). Please use a different Android device to run the Nuimo emulator."
             return
         }
 
-        nuimoView.isEnabled = true
-        nuimoView.displayLedMatrix(intArrayOf(
-                0, 0, 0, 0, 0, 0, 0, 0, 0,
-                0, 0, 1, 1, 0, 1, 1, 0, 0,
-                0, 1, 1, 1, 1, 1, 1, 1, 0,
-                1, 1, 1, 1, 1, 1, 1, 1, 1,
-                1, 1, 1, 1, 1, 1, 1, 1, 1,
-                0, 1, 1, 1, 1, 1, 1, 1, 0,
-                0, 0, 1, 1, 1, 1, 1, 0, 0,
-                0, 0, 0, 1, 1, 1, 0, 0, 0,
-                0, 0, 0, 0, 1, 0, 0, 0, 0).map { it == 1 }.toBooleanArray(), 1.0f, 0.0f)
+        nuimo.enabled = true
     }
 
-    private fun powerOff() {
-        nuimo.powerOff()
-        nuimoView.isEnabled = false
+    override fun onDestroy() {
+        nuimo.enabled = false
+
+        super.onDestroy()
     }
 
     private fun updateStatusLabel() {
@@ -67,6 +49,24 @@ class MainActivity : AppCompatActivity(), NuimoListener, NuimoView.GestureEventL
     /*
      * NuimoListener
      */
+
+    override fun onPowerOn() {
+        nuimoView.isEnabled = true
+        nuimoView.displayLedMatrix(intArrayOf(
+                0, 0, 0, 0, 0, 0, 0, 0, 0,
+                0, 0, 1, 1, 0, 1, 1, 0, 0,
+                0, 1, 1, 1, 1, 1, 1, 1, 0,
+                1, 1, 1, 1, 1, 1, 1, 1, 1,
+                1, 1, 1, 1, 1, 1, 1, 1, 1,
+                0, 1, 1, 1, 1, 1, 1, 1, 0,
+                0, 0, 1, 1, 1, 1, 1, 0, 0,
+                0, 0, 0, 1, 1, 1, 0, 0, 0,
+                0, 0, 0, 0, 1, 0, 0, 0, 0).map { it == 1 }.toBooleanArray(), 1.0f, 0.0f)
+    }
+
+    override fun onPowerOff() {
+        nuimoView.isEnabled = false
+    }
 
     override fun onStartAdvertising() {
         updateStatusLabel()

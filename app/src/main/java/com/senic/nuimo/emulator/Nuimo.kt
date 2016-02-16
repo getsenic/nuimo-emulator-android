@@ -12,6 +12,8 @@ import android.bluetooth.*
 import android.bluetooth.le.AdvertiseCallback
 import android.bluetooth.le.AdvertiseData
 import android.bluetooth.le.AdvertiseSettings
+import android.bluetooth.le.BluetoothLeAdvertiser
+import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
 import android.content.IntentFilter
@@ -27,34 +29,61 @@ class Nuimo(val context: Context) {
         val SINGLE_ROTATION_VALUE = 2800
     }
 
+    val bluetoothSupported: Boolean
+        get() = adapter != null
+
+    var enabled = false
+        set(value) {
+            if (field == value) return
+            field = value
+            when (value) {
+                true  -> { context.registerReceiver(bluetoothStateChangeBroadcastReceiver, IntentFilter(BluetoothAdapter.ACTION_STATE_CHANGED)) }
+                false -> { context.unregisterReceiver(bluetoothStateChangeBroadcastReceiver) }
+            }
+            updateOnOffState()
+        }
     var listener: NuimoListener? = null
     var isAdvertising = false
         private set
     var connectedDevice: BluetoothDevice? = null
         private set
 
-    private val name = "Nuimo"
+    var on = false
+        private set
+
+    private val bluetoothStateChangeBroadcastReceiver = BluetoothStateChangeBroadcastReceiver()
     private val manager = context.getSystemService(Context.BLUETOOTH_SERVICE) as BluetoothManager
-    private val gattServer: BluetoothGattServer? = manager.openGattServer(context, NuimoGattServerCallback());
-    private val adapter: BluetoothAdapter? = manager.adapter
+    private var gattServer: BluetoothGattServer? = null
+    private val adapter: BluetoothAdapter? = manager.adapter.apply { name = "Nuimo" }
     private val addedServices = HashSet<UUID>()
-    private val advertiser = adapter?.bluetoothLeAdvertiser
+    private var advertiser: BluetoothLeAdvertiser? = null
     private val advertiserListener = NuimoAdvertiseCallback()
     private var subscribedCharacteristics = HashMap<UUID, BluetoothGattCharacteristic>()
     private var accumulatedRotationValue = 0.0f
     private var lastRotationEventNanos = System.nanoTime()
 
-    fun powerOn(): Boolean {
-        if (adapter == null || advertiser == null || gattServer == null) {
-            return false
+    private fun updateOnOffState() {
+        when {
+            enabled  && adapter?.state == BluetoothAdapter.STATE_ON          -> powerOn()
+            !enabled || adapter?.state == BluetoothAdapter.STATE_TURNING_OFF -> powerOff()
+            !enabled || adapter?.state == BluetoothAdapter.STATE_OFF         -> powerOff()
+        }
+    }
+
+    private fun powerOn() {
+        if (on || adapter == null) return
+
+        advertiser = adapter.bluetoothLeAdvertiser
+        gattServer = manager.openGattServer(context, NuimoGattServerCallback())
+        if (advertiser == null || gattServer == null) {
+            listener?.onStartAdvertisingFailure(AdvertiseCallback.ADVERTISE_FAILED_FEATURE_UNSUPPORTED)
+            return
         }
 
-        reset()
-
-        adapter.name = name
+        on = true
 
         NUIMO_SERVICE_UUIDS.forEach {
-            gattServer.addService(BluetoothGattService(it, BluetoothGattService.SERVICE_TYPE_PRIMARY).apply {
+            gattServer!!.addService(BluetoothGattService(it, BluetoothGattService.SERVICE_TYPE_PRIMARY).apply {
                 NUIMO_CHARACTERISTIC_UUIDS_FOR_SERVICE_UUID[it]!!.forEach {
                     val properties = PROPERTIES_FOR_CHARACTERISTIC_UUID[it]!!
                     val permissions = PERMISSIONS_FOR_CHARACTERISTIC_UUID[it]!!
@@ -62,24 +91,25 @@ class Nuimo(val context: Context) {
                         if (properties and BluetoothGattCharacteristic.PROPERTY_NOTIFY > 0) {
                             addDescriptor(BluetoothGattDescriptor(CHARACTERISTIC_NOTIFICATION_DESCRIPTOR_UUID, BluetoothGattDescriptor.PERMISSION_WRITE))}})}})}
 
-        return true
+        listener?.onPowerOn()
     }
 
-    fun powerOff() {
-        reset()
-    }
-
-    private fun reset() {
+    private fun powerOff() {
         Log.i(TAG, "RESET")
+        on = false
         stopAdvertising()
         addedServices.clear()
-        gattServer?.clearServices()
         accumulatedRotationValue = 0.0f
         subscribedCharacteristics.clear()
         if (connectedDevice != null) {
             disconnect(connectedDevice!!)
             connectedDevice = null
         }
+        gattServer?.clearServices()
+        gattServer?.close()
+        gattServer = null
+        advertiser = null
+        listener?.onPowerOff()
     }
 
     private fun disconnect(device: BluetoothDevice) {
@@ -117,8 +147,8 @@ class Nuimo(val context: Context) {
     }
 
     private fun notifyCharacteristicChanged(characteristicUuid: UUID, value: Int, formatType: Int): Boolean {
-        if (gattServer == null)      return false
-        if (connectedDevice == null) return false
+        val gattServer = gattServer ?: return false
+        val connectedDevice = connectedDevice ?: return false
         val characteristic = subscribedCharacteristics[characteristicUuid] ?: return false
         characteristic.setValue(value, formatType, 0)
         return gattServer.notifyCharacteristicChanged(connectedDevice, characteristic, false)
@@ -129,7 +159,7 @@ class Nuimo(val context: Context) {
      */
 
     private fun startAdvertising() {
-        if (advertiser == null) return
+        val advertiser = advertiser ?: return
         if (isAdvertising) return
         isAdvertising = true
 
@@ -151,14 +181,22 @@ class Nuimo(val context: Context) {
     }
 
     private fun stopAdvertising() {
+        val advertiser = advertiser ?: return
         if (!isAdvertising) return
         isAdvertising = false
-        if (advertiser == null) return
 
         Log.i(TAG, "STOP ADVERTISING")
 
-        advertiser.stopAdvertising(advertiserListener)
+        // Stop advertising (throws exception at least on Android 4.4 if Bluetooth is already off)
+        try { advertiser.stopAdvertising(advertiserListener) } catch(_: Exception) { }
         listener?.onStopAdvertising()
+    }
+
+    private inner class BluetoothStateChangeBroadcastReceiver : BroadcastReceiver() {
+        override fun onReceive(context: Context, intent: Intent) {
+            if (intent.action != BluetoothAdapter.ACTION_STATE_CHANGED) return
+            updateOnOffState()
+        }
     }
 
     private inner class NuimoAdvertiseCallback : AdvertiseCallback() {
@@ -290,6 +328,8 @@ enum class NuimoSwipeDirection(val gattValue: Int) {
 }
 
 interface NuimoListener {
+    fun onPowerOn()
+    fun onPowerOff()
     fun onStartAdvertising()
     fun onStartAdvertisingFailure(errorCode: Int)
     fun onStopAdvertising()
