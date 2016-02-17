@@ -26,6 +26,7 @@ class NuimoView(context: Context, attrs: AttributeSet?) : DialView(context, attr
     private var leds = booleanArrayOf()
         set(value) {field = value; invalidate()}
     private val ledPaint = Paint().apply { color = Color.argb(255,  255,  255,  255); flags = Paint.ANTI_ALIAS_FLAG }
+    private val flySensorPaint = Paint().apply { color = Color.argb(255,  37,  37,  37); flags = Paint.ANTI_ALIAS_FLAG }
 
     fun displayLedMatrix(leds: BooleanArray, brightness: Float, displayInterval: Float) {
         ledPaint.alpha = Math.max(0, Math.min(255, (255 * brightness).toInt()))
@@ -65,18 +66,27 @@ class NuimoView(context: Context, attrs: AttributeSet?) : DialView(context, attr
 
     override fun onDraw(canvas: Canvas) {
         super.onDraw(canvas)
+
+        val size = Math.min(width, height)
+        val sensorHeight = size * 0.1f
+        val sensorWidth = sensorHeight * 0.3f
+        val sensorLeft = (width - sensorWidth) / 2.0f
+        val sensorTop = height / 2.0f - size * 0.3f
+        val sensorCornerRadius = sensorWidth / 2.0f
+        canvas.drawRoundRect(sensorLeft, sensorTop, sensorLeft + sensorWidth, sensorTop + sensorHeight, sensorCornerRadius, sensorCornerRadius, flySensorPaint)
+
         if (!isEnabled) return
 
-        val size = Math.min(width, height) * 0.2f
-        val left = (width - size) / 2.0f
-        val top = (height - size) / 2.0f
-        val ledSize = size * 0.09f
-        val padding = (size - 9 * ledSize) / 8
+        val matrixSize = size * 0.22f
+        val matrixLeft = (width - matrixSize) / 2.0f
+        val matrixTop = (height - matrixSize) / 2.0f
+        val ledSize = matrixSize * 0.09f
+        val padding = (matrixSize - 9 * ledSize) / 8
 
         (0..8).forEach { row ->
             (0..8).forEach { col ->
                 if (leds.getOrElse(row * 9 + col, { false })) {
-                    canvas.drawCircle(left + col * (ledSize + padding) + ledSize / 2.0f, top + row * (ledSize + padding) + ledSize / 2.0f, ledSize / 2.0f, ledPaint)}}}
+                    canvas.drawCircle(matrixLeft + col * (ledSize + padding) + ledSize / 2.0f, matrixTop + row * (ledSize + padding) + ledSize / 2.0f, ledSize / 2.0f, ledPaint)}}}
     }
 
     interface GestureEventListener {
