@@ -3,6 +3,7 @@ package com.senic.nuimo.emulator
 import android.bluetooth.BluetoothDevice
 import android.support.v7.app.AppCompatActivity
 import android.os.Bundle
+import android.text.Html
 import android.widget.TextView
 import android.widget.Toast
 import butterknife.bindView
@@ -24,10 +25,7 @@ class MainActivity : AppCompatActivity(), NuimoListener, NuimoView.GestureEventL
         nuimoView.gestureEventListener = this
         nuimoView.isEnabled = false
 
-        if (!nuimo.bluetoothSupported) {
-            statusTextView.text = "Your Android device does not support bluetooth advertising (peripheral mode). Please use a different Android device to run the Nuimo emulator."
-            return
-        }
+        updateStatusLabel()
 
         nuimo.enabled = true
     }
@@ -39,11 +37,16 @@ class MainActivity : AppCompatActivity(), NuimoListener, NuimoView.GestureEventL
     }
 
     private fun updateStatusLabel() {
-        statusTextView.text = when {
+        val connectionState = when {
             nuimo.connectedDevice != null -> "Connected to ${(nuimo.connectedDevice as BluetoothDevice).address}"
             nuimo.isAdvertising           -> "Advertising (waiting for connection requests)"
             else                          -> ""
         }
+        statusTextView.text = Html.fromHtml(when {
+            !nuimo.bluetoothSupported -> "Your Android device does not support bluetooth advertising (peripheral mode). Please use a different Android device to run the Nuimo emulator."
+            nuimo.on                  -> "<b>Nuimo is On</b><br/>Disable bluetooth to power off Nuimo<br/>$connectionState"
+            else                      -> "<b>Nuimo is Off</b><br/>Enable bluetooth to power on Nuimo<br/>$connectionState"
+        })
     }
 
     /*
@@ -51,6 +54,7 @@ class MainActivity : AppCompatActivity(), NuimoListener, NuimoView.GestureEventL
      */
 
     override fun onPowerOn() {
+        updateStatusLabel()
         nuimoView.isEnabled = true
         nuimoView.displayLedMatrix(intArrayOf(
                 0, 0, 0, 0, 0, 0, 0, 0, 0,
@@ -65,6 +69,7 @@ class MainActivity : AppCompatActivity(), NuimoListener, NuimoView.GestureEventL
     }
 
     override fun onPowerOff() {
+        updateStatusLabel()
         nuimoView.isEnabled = false
     }
 
