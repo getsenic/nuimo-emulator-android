@@ -8,16 +8,27 @@
 
 package com.senic.nuimo.emulator
 
+import android.animation.ObjectAnimator
 import android.content.Context
 import android.graphics.*
+import android.os.Handler
+import android.os.Looper
 import android.util.AttributeSet
-import android.util.Log
 import android.view.GestureDetector
 import android.view.MotionEvent
+import java.util.*
+import kotlin.concurrent.timerTask
 
 class NuimoView(context: Context, attrs: AttributeSet?) : DialView(context, attrs), DialView.DialListener {
 
     var gestureEventListener: GestureEventListener? = null
+    var ledAlpha = 1.0f
+        set(value) {
+            if (value == field) return
+            field = value
+            ledPaint.alpha = Math.max(0, Math.min(255, (255 * value).toInt()))
+            invalidate()
+        }
 
     override var dialListener: DialListener? = this
 
@@ -26,12 +37,18 @@ class NuimoView(context: Context, attrs: AttributeSet?) : DialView(context, attr
     private var leds = booleanArrayOf()
         set(value) {field = value; invalidate()}
     private val ledPaint = Paint().apply { color = Color.argb(255,  255,  255,  255); flags = Paint.ANTI_ALIAS_FLAG }
+    private val ledAlphaAnimator = ObjectAnimator().apply { target = this@NuimoView; propertyName = "ledAlpha" }
+    private var ledFadeOutTimer = Timer()
     private val flySensorPaint = Paint().apply { color = Color.argb(255,  37,  37,  37); flags = Paint.ANTI_ALIAS_FLAG }
 
     fun displayLedMatrix(leds: BooleanArray, brightness: Float, displayInterval: Float) {
-        ledPaint.alpha = Math.max(0, Math.min(255, (255 * brightness).toInt()))
+        ledFadeOutTimer.cancel()
+        ledFadeOutTimer = Timer()
         this.leds = leds
-        //TODO: Fade LEDs out after display interval
+        ledAlphaAnimator.animate(ledAlpha, brightness, 400)
+        if (displayInterval > 0) {
+            ledFadeOutTimer.schedule(timerTask { runOnUiThread { ledAlphaAnimator.animate(ledAlpha, 0.0f, 1000) } }, (displayInterval * 1000).toLong())
+        }
     }
 
     override fun onSizeChanged(w: Int, h: Int, oldw: Int, oldh: Int) {
@@ -131,5 +148,18 @@ class NuimoView(context: Context, attrs: AttributeSet?) : DialView(context, attr
             }
             return swipeDirection != null
         }
+    }
+}
+
+private fun ObjectAnimator.animate(from: Float, to: Float, duration: Long) {
+    cancel()
+    setFloatValues(from, to)
+    this.duration = duration
+    start()
+}
+
+private fun runOnUiThread(what: () -> (Unit)) {
+    Handler(Looper.getMainLooper()).post {
+        what()
     }
 }
